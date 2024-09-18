@@ -1,7 +1,12 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace MemoryToolkit.Maui;
 
 public static class Utilities
 {
+    public static ILogger Logger { get; set; } = NullLogger.Instance;
+
     public static T? GetFirstSelfOrParentOfType<T>(Element element) where T : class
     {
         if (element is T selfResult)
@@ -40,7 +45,7 @@ public static class Utilities
                     if (LeakMonitorBehavior.GetSuppress(bindableObject) ||
                         (!isRoot && LeakMonitorBehavior.GetCascade(bindableObject)))
                         return;
-                    
+
                     targetName = LeakMonitorBehavior.GetName(bindableObject);
                 }
 
@@ -84,7 +89,7 @@ public static class Utilities
             {
                 // First, clear the BindingContext
                 visualElement.BindingContext = null;
-                
+
                 // Next, isolate the element.
                 visualElement.Parent = null;
 
@@ -110,7 +115,7 @@ public static class Utilities
                     TearDownBehavior.OnTearDown?.Invoke(visualElement);
                     if (visualElement.Handler is IDisposable disposableHandler)
                         disposableHandler.Dispose();
-                    visualElement.Handler?.DisconnectHandler();
+                    TrySafely(() => { visualElement.Handler?.DisconnectHandler(); }, $"Disconnect Handler {visualElement}");
                 }
 
                 visualElement.Resources = null;
@@ -118,7 +123,7 @@ public static class Utilities
             else if (vte is Element element)
             {
                 element.BindingContext = null;
-                
+
                 element.Parent = null;
 
                 element.ClearLogicalChildren();
@@ -135,8 +140,17 @@ public static class Utilities
 
                     if (element.Handler is IDisposable disposableElementHandler)
                         disposableElementHandler.Dispose();
-                    element.Handler.DisconnectHandler();
+                    TrySafely(() => { element.Handler?.DisconnectHandler(); }, $"Disconnect Handler {element}");
                 }
+            }
+        }
+
+        void TrySafely(Action action, string? msg = null)
+        {
+            try { action.Invoke(); }
+            catch (Exception e)
+            {
+                Logger.LogError($"TrySafe:Exception in DisconnectImpl ({msg}): {e}");
             }
         }
     }
